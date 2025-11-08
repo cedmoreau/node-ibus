@@ -32,7 +32,8 @@ var IbusInterface = function(devicePath) {
 
     // implementation
     function initIBUS() {
-        serialPort = new SerialPort(device, {
+        serialPort = new SerialPort({
+            path: device,
             autoOpen: false,
             baudRate: 9600,
             parity: 'even',
