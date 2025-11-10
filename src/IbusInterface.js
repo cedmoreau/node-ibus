@@ -1,171 +1,143 @@
-var SerialPort = require("serialport");
-var log = require('log'),
-    clc = require('cli-color');
+import { SerialPort } from 'serialport';
+import chalk from 'chalk';
+import { EventEmitter } from 'events';
+import IbusProtocol from './IbusProtocol.js';
+import IbusDevices from './IbusDevices.js';
+import debugLib from 'debug';
 
+const debug = debugLib('IBusInterface');
 
-var util = require('util');
-var EventEmitter = require('events').EventEmitter;
+export default class IbusInterface extends EventEmitter {
+    constructor(devicePath = '/dev/ttyAMA0' ) {
+        super();
 
-var IbusProtocol = require('./IbusProtocol.js');
-var IbusDevices = require('./IbusDevices.js');
+        this.device = devicePath;
+        this.serialPort = null;
+        this.parser = null;
+        this.lastActivityTime = process.hrtime();
+        this.queue = [];
+    }
 
-var IbusInterface = function(devicePath) {
+    setDevicePath(devicePath) {
+        this.device = devicePath;
+    }
 
-    // self reference
-    var _self = this;
-
-    // exposed data
-    this.getInterface = getInterface;
-    this.initIBUS = initIBUS;
-    this.closeIBUS = closeIBUS;
-    this.startup = startup;
-    this.shutdown = shutdown;
-    this.sendMessage = sendMessage;
-
-    // local data
-    var serialPort;
-    var device = devicePath;
-    var parser;
-    var lastActivityTime = process.hrtime();
-    var queue = [];
-
-
-    // implementation
-    function initIBUS() {
-        serialPort = new SerialPort({
-            path: device,
-            autoOpen: false,
+    initIBUS() {
+        this.serialPort = new SerialPort({
+            path: this.device,
             baudRate: 9600,
-            parity: 'even',
-            stopbits: 1,
-            databits: 8,
-            parser: SerialPort.parsers.raw
+            parity: 'none',
+            stopBits: 1,
+            dataBits: 8,
+            autoOpen: false
         });
 
-        serialPort.open(function(error) {
+        this.serialPort.open((error) => {
+            debug('[IbusInterface] open');
             if (error) {
-                log.error('[IbusInterface] Failed to open: ' + error);
-            } else {
-                log.info('[IbusInterface] Port Open [' + device + ']');
-
-                serialPort.on('data', function(data) {
-                    //log.debug('[IbusInterface] Data on port: ', data);
-
-                    lastActivityTime = process.hrtime();
-                });
-
-                serialPort.on('error', function(err) {
-                    log.error("[IbusInterface] Error", err);
-                    shutdown(startup);
-                });
-
-                parser = new IbusProtocol();
-                parser.on('message', onMessage);
-
-                serialPort.pipe(parser);
-
-                watchForEmptyBus(processWriteQueue);
+                console.log('[IbusInterface] Failed to open: ' + error);
+                return;
             }
+
+            console.log('[IbusInterface] Port Open [' + this.device + ']');
+
+            this.serialPort.on('data', (data) => {
+                this.lastActivityTime = process.hrtime();
+            });
+
+            this.serialPort.on('error', (err) => {
+                console.log("[IbusInterface] Error", err);
+                this.shutdown(this.initIBUS.bind(this));
+            });
+
+            this.parser = new IbusProtocol();
+            this.parser.on('message', this.onMessage.bind(this));
+
+            this.serialPort.pipe(this.parser);
+
+            this.watchForEmptyBus(this.processWriteQueue.bind(this));
         });
     }
 
-    function getHrDiffTime(time) {
-        // ts = [seconds, nanoseconds]
-        var ts = process.hrtime(time);
-        // convert seconds to miliseconds and nanoseconds to miliseconds as well
+    getHrDiffTime(time) {
+        const ts = process.hrtime(time);
         return (ts[0] * 1000) + (ts[1] / 1000000);
-    };
+    }
 
-
-    function watchForEmptyBus(workerFn) {        
-        if (getHrDiffTime(lastActivityTime) >= 20) {
-            workerFn(function success() {
-                // operation is ready, resume looking for an empty bus
-                setImmediate(watchForEmptyBus, workerFn);
+    watchForEmptyBus(workerFn) {
+        if (this.getHrDiffTime(this.lastActivityTime) >= 20) {
+            workerFn(() => {
+                setImmediate(this.watchForEmptyBus.bind(this), workerFn);
             });
         } else {
-            // keep looking for an empty Bus
-            setImmediate(watchForEmptyBus, workerFn);
+            setImmediate(this.watchForEmptyBus.bind(this), workerFn);
         }
     }
 
-    function processWriteQueue(ready) {
-        // noop on empty queue
-        if (queue.length <= 0) {
+    processWriteQueue(ready) {
+        if (this.queue.length <= 0) {
             ready();
             return;
         }
 
-        // process 1 message
-        var dataBuf = queue.pop();
+        const dataBuf = this.queue.pop();
+        debug(chalk.blue('[IbusInterface] Write queue length: '), this.queue.length);
 
-        log.debug(clc.blue('[IbusInterface] Write queue length: '), queue.length);
-
-        serialPort.write(dataBuf, function(error, resp) {
+        this.serialPort.write(dataBuf, (error, resp) => {
             if (error) {
-                log.error('[IbusInterface] Failed to write: ' + error);
+                console.log('[IbusInterface] Failed to write: ' + error);
             } else {
-                log.info('[IbusInterface] ', clc.white('Wrote to Device: '), dataBuf, resp);
+                debug('[IbusInterface] ', chalk.white('Wrote to Device: '), dataBuf, resp);
 
-                serialPort.drain(function(error) {
-                    log.debug(clc.white('Data drained'));
-
-                    // this counts as an activity, so mark it
-                    lastActivityTime = process.hrtime();
-
+                this.serialPort.drain((error) => {
+                    debug(chalk.white('Data drained'));
+                    this.lastActivityTime = process.hrtime();
                     ready();
                 });
             }
-
         });
     }
 
-    function closeIBUS(callb) {
-        serialPort.close(function(error) {
+    closeIBUS(callback) {
+        this.serialPort.close((error) => {
             if (error) {
-                log.error('[IbusInterface] Error closing port: ', error);
-                callb();
+                console.log('[IbusInterface] Error closing port: ', error);
             } else {
-                log.info('[IbusInterface] Port Closed [' + device + ']');
-                parser = null;
-                callb();
+                debug('[IbusInterface] Port Closed [' + this.device + ']');
+                this.parser = null;
             }
+            callback();
         });
     }
 
-    function getInterface() {
-        return serialPort;
+    getInterface() {
+        return this.serialPort;
     }
 
-    function startup() {
-        initIBUS();
+    startup() {
+        this.initIBUS();
     }
 
-    function shutdown(callb) {
-        log.info('[IbusInterface] Shutting down Ibus device..');
-        closeIBUS(callb);
+    shutdown(callback) {
+        debug('[IbusInterface] Shutting down Ibus device..');
+        this.closeIBUS(callback);
     }
 
-    function onMessage(msg) {
-        log.debug('[IbusInterface] Raw Message: ', msg.src, msg.len, msg.dst, msg.msg, '[' + msg.msg.toString('ascii') + ']', msg.crc);
-
-        _self.emit('data', msg);
+    onMessage(msg) {
+        debug('[IbusInterface] Raw Message: ', msg.src, msg.len, msg.dst, msg.msg, '[' + msg.msg.toString('ascii') + ']', msg.crc);
+        this.emit('data', msg);
     }
 
-    function sendMessage(msg) {
+    sendMessage(msg) {
+        const dataBuf = IbusProtocol.createIbusMessage(msg);
+        debug('[IbusInterface] Send message: ', dataBuf);
 
-        var dataBuf = IbusProtocol.createIbusMessage(msg);
-        log.debug('[IbusInterface] Send message: ', dataBuf);
-
-        if (queue.length > 1000) {
-            log.warning('[IbusInterface] Queue too large, dropping message..', dataBuf);
+        if (this.queue.length > 1000) {
+            console.log('[IbusInterface] Queue too large, dropping message..', dataBuf);
             return;
         }
 
-        queue.unshift(dataBuf);
+        this.queue.unshift(dataBuf);
     }
+}
 
-};
-
-util.inherits(IbusInterface, EventEmitter);
-module.exports = IbusInterface;
