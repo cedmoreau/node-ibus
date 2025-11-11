@@ -4,7 +4,7 @@ This is a JavaScript implementation of the single wire Ibus protocol found on ma
 
 ## Details
 
-You can use this package with Resler's interface (http://www.reslers.de/IBUS/index.html) or similar Ibus adapters.
+You can use this package with Resler's interface (http://www.reslers.de/IBUS/index.html) or similar Ibus adapters. It also works with a TH3122 directly connected to the serial port of a Raspberry.
 While being mostly an async implementation the write queue however relies on setImmediate to detect idle state on the bus. It then processes a write queue when the bus is being idle for more then 1.4 ms.
 
 

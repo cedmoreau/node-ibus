@@ -2,7 +2,7 @@ import { Transform } from 'stream';
 import debugLib from 'debug';
 import chalk from 'chalk';
 
-const debug = debugLib('IBusProtocol');
+const debug = debugLib('IbusProtocol');
 
 export default class IbusProtocol extends Transform {
     constructor(options = {}) {

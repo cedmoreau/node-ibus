@@ -1,7 +1,7 @@
 import IbusInterface from './src/IbusInterface.js';
-import IbusDevices from './src/IbusDevices.js';
+import IbusApp from './src/IbusApp.js';
 
 export {
     IbusInterface,
-    IbusDevices
+    IbusApp
 };

@@ -5,7 +5,7 @@ import IbusProtocol from './IbusProtocol.js';
 import IbusDevices from './IbusDevices.js';
 import debugLib from 'debug';
 
-const debug = debugLib('IBusInterface');
+const debug = debugLib('IbusInterface');
 
 export default class IbusInterface extends EventEmitter {
     constructor(devicePath = '/dev/ttyAMA0' ) {
