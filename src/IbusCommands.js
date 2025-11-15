@@ -23,7 +23,6 @@ export const commands = {
     Gong:                        0x1C, /*"IKE Gong"*/
     TemperatureReq:              0x1D,
     TimeData:                    0x1F,
-    MT:                          0x21,  /*Radio Short cuts*/
     GTChangeUIReq:               0x20,
     GTChangeUI:                  0x21,
     GTMenuBuffer:                0x22, /* Display text ack */
@@ -57,7 +56,7 @@ export const commands = {
     LampStatusReq:               0x5A, /*"Lamp status request"*/
     LampStatus:                  0x5B, /*"Lamp Status"*/
     InstrumentLightStatus:       0x5C, /*"Instrument cluster lighting status"*/
-    InstrumentLightStatusReq:	 0x5D, 
+    InstrumentLightStatusReq:	   0x5D, 
     GTWriteIndex:                0x60,
     GTWriteIndexTMC:             0x61,
     GTWriteZone:                 0x62,
@@ -68,7 +67,6 @@ export const commands = {
     DoorsWindowsStatusReq:       0x79, /*"Doors/windows status request"*/
     DoorsWindowsStatus:          0x7A, /*"Doors/windows status"*/
     SHDStatus:                   0x7C, /*"SHD status"*/
-    RDSChannels:                 0xD4,  /*RDS channel list*/
     DiagData:                    0xA0, /*"DIAG data"*/
     GTTelematicsCoordinates:     0xA2,
     GTTelematicsLocation:        0xA4,
@@ -78,17 +76,18 @@ export const commands = {
     TMCStatus:                   0xA8,
     NavigationTelephoneData:     0xA9,
     NavigationCtrl:              0xAA, /*"Navigation Control"*/
-    NavigationRemoteCtrl:        0xAB /* Remote control status */
+    NavigationRemoteCtrl:        0xAB, /* Remote control status */
+    RDSChannels:                 0xD4,  /*RDS channel list*/
 };
 
-export function getCommandName(key) {
-    const hkey = parseInt(key, 16);
-    for (const dkey in commands) {
-        if (commands[dkey] === hkey) {
-            return `${dkey} - ${key}`;
-        }
+export function getCommandName(cmd) {
+  for (const dkey in commands) {
+    if (commands[dkey] === cmd) {
+      return `${dkey} - ${cmd} (0x${cmd.toString(16)})`;
     }
-    return `Unknown Command - ${key}`;
+  }
+
+  return `Unknown Command - ${cmd} (0x${cmd.toString(16)})`;
 }
 
 export default {
